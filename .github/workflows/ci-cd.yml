@@ -1,0 +1,143 @@
+# iink v2 frontend — CI on every push/PR, CD to the iink.co.kr server via CodeDeploy.
+#
+# CI (always): install, lint, production build.
+# CD runs only when:
+#   - started by hand: Actions → "Frontend CI/CD" → Run workflow → mode = diagnose | deploy
+#   - or a push to main AND repo variable AUTO_DEPLOY = true (off until the first manual deploy works)
+# Runbook: deploy/README.md
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'diagnose = read-only server report, installs nothing. deploy = install + restart frontend.'
+        type: choice
+        options: [diagnose, deploy]
+        default: diagnose
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20.20.2'
+  AWS_REGION: ap-northeast-2
+  S3_BUCKET: toptable-github-actions-s3-bucket
+  S3_PREFIX: iink-v2/ft
+  CD_APPLICATION: codedeploy-app
+  CD_GROUP: codedeploy-deployment-iink-v2-ft
+
+jobs:
+  ci:
+    name: Lint, build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - name: Production build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: /api                     # browser calls same domain
+          BACKEND_INTERNAL_URL: http://127.0.0.1:4105        # Next.js forwards /api/* to the backend on the server
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+      - name: Assemble release (standalone server + static + public)
+        run: |
+          rm -rf release
+          cp -a .next/standalone release
+          mkdir -p release/.next
+          cp -a .next/static release/.next/static
+          cp -a public release/public
+          test -f release/server.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release/
+          include-hidden-files: true      # release/.next is a hidden folder
+          retention-days: 3
+
+  cd:
+    name: Deploy (${{ github.event.inputs.mode || 'deploy' }})
+    needs: ci
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    environment: production
+    concurrency:
+      group: iink-v2-ft-deploy
+      cancel-in-progress: false
+    env:
+      MODE: ${{ github.event.inputs.mode || 'deploy' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get release from CI job
+        if: env.MODE == 'deploy'
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release/
+
+      - name: Build bundle folder
+        run: bash deploy/package.sh "$MODE"
+
+      - name: Zip bundle
+        run: (cd build/bundle && zip -qry ../bundle.zip .) && du -h build/bundle.zip
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload bundle to S3
+        id: upload
+        run: |
+          key="$S3_PREFIX/ft-$MODE-$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}.zip"
+          aws s3 cp build/bundle.zip "s3://$S3_BUCKET/$key" --sse AES256 --only-show-errors
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Start CodeDeploy deployment
+        id: deploy
+        run: |
+          id=$(aws deploy create-deployment \
+            --application-name "$CD_APPLICATION" \
+            --deployment-group-name "$CD_GROUP" \
+            --deployment-config-name CodeDeployDefault.AllAtOnce \
+            --file-exists-behavior OVERWRITE \
+            --description "iink-v2 ft $MODE ${GITHUB_SHA::7} by $GITHUB_ACTOR" \
+            --s3-location "bucket=$S3_BUCKET,key=${{ steps.upload.outputs.key }},bundleType=zip" \
+            --query deploymentId --output text)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "CodeDeploy deployment: $id"
+
+      - name: Wait for result and show server output
+        run: |
+          id="${{ steps.deploy.outputs.id }}"
+          ok=0; aws deploy wait deployment-successful --deployment-id "$id" || ok=$?
+          echo "::group::Server output (CodeDeploy lifecycle events)"
+          for t in $(aws deploy list-deployment-targets --deployment-id "$id" --query 'targetIds[]' --output text); do
+            aws deploy get-deployment-target --deployment-id "$id" --target-id "$t" \
+              --query 'deploymentTarget.instanceTarget.lifecycleEvents[].[lifecycleEventName,status,diagnostics.logTail]' \
+              --output text | tee -a server-output.txt
+          done
+          echo "::endgroup::"
+          if [ "$MODE" = "diagnose" ]; then
+            grep -q "IINK-V2 DIAGNOSE" server-output.txt && { echo "Diagnose report above (stopped on purpose, nothing installed)."; exit 0; }
+            echo "::error::diagnose report not found — see output above"; exit 1
+          fi
+          [ "$ok" = 0 ] || { echo "::error::deployment $id failed — see server output above (failed releases roll back automatically)"; exit 1; }
+          echo "Deployed. Frontend is live on the server at 127.0.0.1:3105."
+
+      - name: Delete bundle from S3
+        if: always() && steps.upload.outputs.key != ''
+        run: aws s3 rm "s3://$S3_BUCKET/${{ steps.upload.outputs.key }}" --only-show-errors || echo "::warning::could not delete bundle from S3"

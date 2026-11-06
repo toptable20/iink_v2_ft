@@ -1,0 +1,25 @@
+# CodeDeploy spec for the iink v2 frontend (deployment group: codedeploy-deployment-iink-v2-ft).
+# The bundle is copied ONLY into /home/iink-v2/ft/incoming. See deploy/README.md.
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /home/iink-v2/ft/incoming
+file_exists_behavior: OVERWRITE
+hooks:
+  BeforeInstall:
+    - location: deploy/scripts/preflight.sh
+      timeout: 120
+      runas: root
+  AfterInstall:
+    - location: deploy/scripts/install.sh
+      timeout: 600
+      runas: root
+  ApplicationStart:
+    - location: deploy/scripts/start.sh
+      timeout: 120
+      runas: root
+  ValidateService:
+    - location: deploy/scripts/validate.sh
+      timeout: 180
+      runas: root

@@ -1,0 +1,4 @@
+# Server scripts must keep Linux line endings.
+*.sh text eol=lf
+deploy/app.conf text eol=lf
+appspec.yml text eol=lf

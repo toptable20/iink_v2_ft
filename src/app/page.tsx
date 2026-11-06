@@ -1,69 +1,26 @@
-import Image from "next/image";
+import Image from 'next/image';
+import Link from 'next/link';
 
+// Home — same look as the old live iink.co.kr home (old Home.vue).
+// Old page scaled by screen HEIGHT (≤1000px, ≤670px), so these use height media queries.
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="iink-old flex min-h-dvh flex-1 flex-col items-center justify-between bg-[#FAF9F5] bg-[url('/brand/iink_main.png')] bg-cover bg-top bg-no-repeat px-5 text-center">
+      <div className="mt-[250px] flex flex-col items-center [@media(max-height:1000px)]:mt-[100px] [@media(max-height:670px)]:mt-[95px]">
+        <Image src="/brand/logo_2.png" alt="iink" width={836} height={252} priority className="h-auto w-[250px] [@media(max-height:670px)]:w-[45vw]" />
+        <h1 className="mt-[45px] text-[36px] text-[#1A1A1A] [-webkit-text-stroke:1px_black] max-[640px]:text-[26px] [@media(max-height:670px)]:mt-[25px] [@media(max-height:670px)]:text-[24px]">
+          나에게 딱맞는<br className="min-[1081px]:hidden" /> 맞춤 영양분석 솔루션
+        </h1>
+      </div>
+
+      <Link
+        href="/start"
+        className="mb-[100px] flex size-[280px] items-center justify-center rounded-full bg-white font-[Arial,Helvetica,sans-serif] text-[40px] text-[#B3E5C5] transition-transform hover:scale-[1.03] [@media(max-height:1000px)]:mb-0 [@media(max-height:1000px)]:size-[224px] [@media(max-height:1000px)]:text-[28px] [@media(max-height:670px)]:mt-[35px] [@media(max-height:670px)]:size-[184px]"
+      >
+        START
+      </Link>
+
+      <Image src="/brand/toptable_2.png" alt="toptable" width={674} height={144} className="mb-[70px] h-auto w-[150px] [@media(max-height:670px)]:mb-[50px]" />
+    </main>
   );
 }

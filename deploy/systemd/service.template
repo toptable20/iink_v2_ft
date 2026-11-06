@@ -1,0 +1,31 @@
+[Unit]
+Description=iink v2 @APP@ (Node.js) — managed by iink-v2 CodeDeploy scripts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=iinkv2
+Group=iinkv2
+WorkingDirectory=@CURRENT@
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=@PORT@
+Environment=PORT_API=@PORT@
+# Secrets (root-only file). Values here override the lines above, so the file must not set ports/hosts.
+EnvironmentFile=@ENV_FILE@
+ExecStart=@NODE@ @START@
+Restart=always
+RestartSec=5
+
+# Protect the shared server: if this app ever uses too much, Linux limits/kills THIS app, not goyoo.
+MemoryMax=@MEMORY_MAX@
+CPUWeight=50
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
