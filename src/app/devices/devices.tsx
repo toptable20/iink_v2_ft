@@ -52,6 +52,10 @@ export function Devices() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // localStorage is read after mount on purpose: reading it during render (or in a lazy
+  // useState initializer) would make the server and client render different markup and
+  // cause a hydration mismatch. Runs once, so no cascading renders.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setLinkId(readStoredLinkId()), []);
 
   const refresh = useCallback(async () => {
@@ -66,6 +70,10 @@ export function Devices() {
 
   useEffect(() => {
     if (!linkId) return;
+    // First poll fires immediately so the page is not blank for POLL_MS; the rest are on
+    // the interval. refresh() is async, so its setState lands in a later tick, not during
+    // this effect — the rule cannot see that.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const timer = setInterval(refresh, POLL_MS);
     return () => clearInterval(timer);
