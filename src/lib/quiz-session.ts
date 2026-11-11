@@ -49,14 +49,14 @@ export async function gql<T>(query: string, variables?: Record<string, unknown>)
       body: JSON.stringify({ query, variables }),
     });
   } catch {
-    throw new Error(`Cannot reach the iink server at ${API}. Is the PC on and on the same Wi-Fi?`);
+    throw new Error('서버에 연결할 수 없습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
   }
   const body = await res.json().catch(() => ({}));
   if (body.errors?.length) {
     const message = body.errors[0].message;
     throw new Error(Array.isArray(message) ? message.join('\n') : (message ?? 'Request failed'));
   }
-  if (!res.ok || !body.data) throw new Error(`API error ${res.status}`);
+  if (!res.ok || !body.data) throw new Error('요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
   return body.data as T;
 }
 

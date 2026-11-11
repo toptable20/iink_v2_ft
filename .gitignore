@@ -20,8 +20,8 @@
 # production
 /build
 
-# app builds copied in for download (built from iink_v2_app, not source)
-/public/app/
+# The app download (public/app/iink.apk, built from iink_v2_app) IS committed: the deploy builds from git,
+# and without it the website's 앱 다운로드 button would 404 on the server.
 
 # misc
 .DS_Store

@@ -7,6 +7,23 @@ export const authInput =
 export const authButton =
   'inline-flex min-h-[51px] w-full items-center justify-center rounded-full border border-[#1d2947] bg-[#1d2947] px-[25px] text-[15px] font-semibold text-white transition duration-200 hover:bg-[#2a3a60] disabled:cursor-not-allowed disabled:opacity-50';
 
+export function authErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : '';
+  const translations: Record<string, string> = {
+    'No member with that member nick!': '해당 닉네임의 회원을 찾을 수 없습니다.',
+    'Wrong password, try again!': '비밀번호가 올바르지 않습니다. 다시 확인해 주세요.',
+    'You have been blocked!': '계정 이용이 제한되었습니다. 고객센터에 문의해 주세요.',
+    'Please verify your email before logging in': '로그인하려면 이메일 인증이 필요합니다.',
+    'Used Member Nick or Phone!': '이미 사용 중인 닉네임 또는 휴대폰 번호입니다.',
+  };
+
+  if (translations[message]) return translations[message];
+  if (message.startsWith('Cannot reach the iink server at ')) {
+    return '서버에 연결할 수 없습니다. 서버 상태와 네트워크를 확인해 주세요.';
+  }
+  return message || fallback;
+}
+
 // Page frame for login and signup. Background = old iink.co.kr home (beige + green arcs).
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { login, useSession } from '@/lib/auth';
-import { authButton, authInput, Field, FormError } from '../auth-ui';
+import { authButton, authErrorMessage, authInput, Field, FormError } from '../auth-ui';
 import { PasswordInput } from '../password-input';
 
 export function LoginForm() {
@@ -19,10 +19,10 @@ export function LoginForm() {
     return (
       <div className="space-y-5">
         <p className="text-[15px]">
-          You are logged in as <strong>{session.member.memberNick}</strong>.
+          <strong>{session.member.memberNick}</strong> 님으로 로그인되어 있습니다.
         </p>
         <Link href="/" className={authButton}>
-          Go to home
+          홈으로 가기
         </Link>
       </div>
     );
@@ -36,14 +36,14 @@ export function LoginForm() {
       await login({ memberNick: memberNick.trim(), memberPassword });
       router.replace('/');
     } catch (err) {
-      setError((err as Error).message);
+      setError(authErrorMessage(err, '로그인에 실패했습니다. 다시 시도해 주세요.'));
       setBusy(false);
     }
   }
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      <Field label="Nickname">
+      <Field label="닉네임">
         <input
           className={authInput}
           value={memberNick}
@@ -52,7 +52,7 @@ export function LoginForm() {
           required
         />
       </Field>
-      <Field label="Password">
+      <Field label="비밀번호">
         <PasswordInput
           value={memberPassword}
           onChange={(e) => setMemberPassword(e.target.value)}
@@ -62,12 +62,12 @@ export function LoginForm() {
       </Field>
       <FormError message={error} />
       <button type="submit" className={authButton} disabled={busy || !memberNick.trim() || !memberPassword}>
-        {busy ? 'Logging in…' : 'Log in'}
+        {busy ? '로그인 중…' : '로그인'}
       </button>
       <p className="text-center text-[14px] text-[#687080]">
-        New to iink?{' '}
+        아직 회원이 아니신가요?{' '}
         <Link href="/signup" className="font-semibold text-[#1d2947] underline-offset-4 hover:underline">
-          Create an account
+          회원가입
         </Link>
       </p>
     </form>

@@ -36,6 +36,8 @@ export const SAMSUNG_METRICS = [
   { key: 'irregularRhythmAlerts', label: 'Irregular rhythm alerts (Samsung)', unit: '', decimals: 0, kind: 'number' },
   { key: 'spo2Min', label: 'Blood oxygen (lowest)', unit: '%', decimals: 0, kind: 'number' },
   { key: 'spo2Max', label: 'Blood oxygen (highest)', unit: '%', decimals: 0, kind: 'number' },
+  // 12_워치입력 W06: the app's own average of every reading taken during that night's sleep.
+  { key: 'spo2Night', label: 'Blood oxygen (night average)', unit: '%', decimals: 1, kind: 'number' },
   // Activity
   { key: 'activeTimeMinutes', label: 'Active time', unit: 'min', decimals: 0, kind: 'number' },
   { key: 'activeCalories', label: 'Active calories', unit: 'kcal', decimals: 0, kind: 'number' },

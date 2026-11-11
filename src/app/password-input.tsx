@@ -28,7 +28,7 @@ export function PasswordInput(props: Omit<React.InputHTMLAttributes<HTMLInputEle
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-label={visible ? '비밀번호 숨기기' : '비밀번호 표시'}
         aria-pressed={visible}
         className="absolute top-1/2 right-3 mt-[3px] -translate-y-1/2 rounded-md p-1 text-[#8a909b] transition-colors hover:text-[#1d2947] focus-visible:text-[#1d2947] focus-visible:outline-none"
       >

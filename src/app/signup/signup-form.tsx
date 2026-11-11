@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { NICK_LENGTH, PASSWORD_LENGTH, PHONE_PATTERN, signup, useSession } from '@/lib/auth';
-import { authButton, authInput, Field, FormError } from '../auth-ui';
+import { authButton, authErrorMessage, authInput, Field, FormError } from '../auth-ui';
 import { PasswordInput } from '../password-input';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,14 +12,14 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Same rules as the backend, checked before sending so the member sees a clear message.
 function validate(nick: string, phone: string, password: string, confirm: string, email: string): string | null {
   if (nick.length < NICK_LENGTH.min || nick.length > NICK_LENGTH.max) {
-    return `Nickname must be ${NICK_LENGTH.min}–${NICK_LENGTH.max} characters.`;
+    return `닉네임은 ${NICK_LENGTH.min}~${NICK_LENGTH.max}자로 입력해 주세요.`;
   }
-  if (!PHONE_PATTERN.test(phone)) return 'Phone number must be 7–15 digits, e.g. 01012345678.';
+  if (!PHONE_PATTERN.test(phone)) return '휴대폰 번호를 숫자 7~15자리로 입력해 주세요. 예: 01012345678';
   if (password.length < PASSWORD_LENGTH.min || password.length > PASSWORD_LENGTH.max) {
-    return `Password must be ${PASSWORD_LENGTH.min}–${PASSWORD_LENGTH.max} characters.`;
+    return `비밀번호는 ${PASSWORD_LENGTH.min}~${PASSWORD_LENGTH.max}자로 입력해 주세요.`;
   }
-  if (password !== confirm) return 'The two passwords are not the same.';
-  if (email && !EMAIL_PATTERN.test(email)) return 'Email address is not valid.';
+  if (password !== confirm) return '비밀번호가 일치하지 않습니다.';
+  if (email && !EMAIL_PATTERN.test(email)) return '올바른 이메일 주소를 입력해 주세요.';
   return null;
 }
 
@@ -38,10 +38,10 @@ export function SignupForm() {
     return (
       <div className="space-y-5">
         <p className="text-[15px]">
-          You are logged in as <strong>{session.member.memberNick}</strong>.
+          <strong>{session.member.memberNick}</strong> 님으로 로그인되어 있습니다.
         </p>
         <Link href="/" className={authButton}>
-          Go to home
+          홈으로 가기
         </Link>
       </div>
     );
@@ -64,14 +64,14 @@ export function SignupForm() {
       await signup({ memberNick: nick, memberPhone: phone, memberPassword, ...(email ? { memberEmail: email } : {}) });
       router.replace('/');
     } catch (err) {
-      setError((err as Error).message);
+      setError(authErrorMessage(err, '회원가입에 실패했습니다. 다시 시도해 주세요.'));
       setBusy(false);
     }
   }
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      <Field label="Nickname" hint={`${NICK_LENGTH.min}–${NICK_LENGTH.max} characters. You log in with it.`}>
+      <Field label="닉네임" hint={`${NICK_LENGTH.min}~${NICK_LENGTH.max}자 · 로그인할 때 사용합니다.`}>
         <input
           className={authInput}
           value={memberNick}
@@ -80,7 +80,7 @@ export function SignupForm() {
           maxLength={NICK_LENGTH.max}
         />
       </Field>
-      <Field label="Phone number">
+      <Field label="휴대폰 번호">
         <input
           className={authInput}
           type="tel"
@@ -91,7 +91,7 @@ export function SignupForm() {
           autoComplete="tel"
         />
       </Field>
-      <Field label="Password" hint={`${PASSWORD_LENGTH.min}–${PASSWORD_LENGTH.max} characters.`}>
+      <Field label="비밀번호" hint={`${PASSWORD_LENGTH.min}~${PASSWORD_LENGTH.max}자`}>
         <PasswordInput
           value={memberPassword}
           onChange={(e) => setMemberPassword(e.target.value)}
@@ -99,7 +99,7 @@ export function SignupForm() {
           maxLength={PASSWORD_LENGTH.max}
         />
       </Field>
-      <Field label="Confirm password">
+      <Field label="비밀번호 확인">
         <PasswordInput
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
@@ -107,7 +107,7 @@ export function SignupForm() {
           maxLength={PASSWORD_LENGTH.max}
         />
       </Field>
-      <Field label="Email (optional)">
+      <Field label="이메일 (선택)">
         <input
           className={authInput}
           type="email"
@@ -122,12 +122,12 @@ export function SignupForm() {
         className={authButton}
         disabled={busy || !memberNick.trim() || !memberPhone.trim() || !memberPassword || !confirmPassword}
       >
-        {busy ? 'Creating account…' : 'Create account'}
+        {busy ? '가입 중…' : '회원가입'}
       </button>
       <p className="text-center text-[14px] text-[#687080]">
-        Already have an account?{' '}
+        이미 회원이신가요?{' '}
         <Link href="/login" className="font-semibold text-[#1d2947] underline-offset-4 hover:underline">
-          Log in
+          로그인
         </Link>
       </p>
     </form>

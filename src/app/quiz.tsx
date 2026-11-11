@@ -2,20 +2,17 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type Answers, fetchNext, fetchReport, type NextStep, type Report } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth';
-import { createMyHealthReport } from '@/lib/health-report';
+import { confirmAction, koreanError, showError } from '@/lib/alerts';
 import {
-  answerQuizQuestion,
-  type QuizSessionState,
-  restartQuizSession,
-  startQuizSession,
-  undoLastQuizAnswer,
-} from '@/lib/quiz-session';
-import { LoggedInAs } from './logged-in-as';
-import { ReportView } from './report-view';
-
-type Stage = 'quiz' | 'report';
+  answerSmartQuiz,
+  restartSmartQuiz,
+  type SmartQuizState,
+  type SmartQuizStep,
+  startSmartQuiz,
+  undoSmartQuiz,
+} from '@/lib/smart-quiz';
 
 function ChevronLeft() {
   return (
@@ -34,150 +31,129 @@ function CloseIcon() {
 }
 
 export function Quiz() {
-  const [stage, setStage] = useState<Stage>('quiz');
-  const [answers, setAnswers] = useState<Answers>({});
-  const [order, setOrder] = useState<string[]>([]);
-  const [step, setStep] = useState<NextStep | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
+  const router = useRouter();
+  const [step, setStep] = useState<SmartQuizStep | null>(null);
   const [numberInput, setNumberInput] = useState('');
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needLogin, setNeedLogin] = useState(false);
   const answerPending = useRef(false);
-  // Logged-in members: the quiz is saved on the server after every answer (sessionId set).
-  // Guests: answers stay in this page and nothing is saved (sessionId null).
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [resumed, setResumed] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  const applySaved = useCallback((state: QuizSessionState, draftAnswer?: number | null) => {
-    setSessionId(state.sessionId);
-    setAnsweredCount(state.answeredCount);
-    if (state.report) {
-      setReport(state.report);
-      setSaved(true);
-      setStage('report');
-      // Then the combined result (quiz + connected NHIS/watch data); the quiz report stays if it fails.
-      createMyHealthReport()
-        .then(setReport)
-        .catch((e: Error) => console.error('[report] combined result was not created:', e.message));
-      return;
-    }
-    const question = state.step.question;
-    if (!question) throw new Error('The quiz did not return a question.');
-    setStep(state.step);
-    setNumberInput(question.numeric && draftAnswer != null ? String(draftAnswer) : '');
-    setSelectedOption(!question.numeric && draftAnswer != null ? draftAnswer : null);
-    setStage('quiz');
-  }, []);
+  // draftAnswer: after going back, the removed answer (a code for choices, the number otherwise).
+  const applyState = useCallback(
+    (state: SmartQuizState, draftAnswer?: number | null) => {
+      setSessionId(state.sessionId);
+      setAnsweredCount(state.answeredCount);
+      if (state.result) {
+        // replace: back from the report must not land on the finished quiz again
+        router.replace(`/results?id=${state.result._id}&saved=1`);
+        return;
+      }
+      const question = state.step.question;
+      if (!question) throw new Error('다음 질문을 불러오지 못했습니다.');
+      setStep(state.step);
+      setNumberInput(question.numeric && draftAnswer != null ? String(draftAnswer) : '');
+      // The answer value is the code = option index + 1.
+      setSelectedOption(!question.numeric && draftAnswer != null ? draftAnswer - 1 : null);
+    },
+    [router],
+  );
 
-  const runSaved = useCallback(
-    async (action: () => Promise<QuizSessionState>, restoreLastAnswer = false) => {
+  // errorTitle: shown as a pop-up when an action (answer / back / start over) fails; without it (loading the
+  // quiz) the error stays on the page.
+  const run = useCallback(
+    async (action: () => Promise<SmartQuizState>, restoreLastAnswer = false, errorTitle?: string) => {
       setBusy(true);
       setError(null);
       try {
         const state = await action();
-        applySaved(state, restoreLastAnswer ? state.lastAnswerValue : undefined);
+        applyState(state, restoreLastAnswer ? state.lastAnswerValue : undefined);
         return state;
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        if (errorTitle) void showError(errorTitle, e);
+        else setError(koreanError(e instanceof Error ? e.message : String(e)));
         return null;
       } finally {
         setBusy(false);
       }
     },
-    [applySaved],
+    [applyState],
   );
-
-  const load = useCallback(async (nextAnswers: Answers, nextOrder: string[], draftAnswer?: number) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const nextStep = await fetchNext(nextAnswers);
-      setAnswers(nextAnswers);
-      setOrder(nextOrder);
-      if (nextStep.done) {
-        setReport(await fetchReport(nextAnswers));
-        setStage('report');
-      } else if (nextStep.question) {
-        setStep(nextStep);
-        setNumberInput(nextStep.question.numeric && draftAnswer !== undefined ? String(draftAnswer) : '');
-        setSelectedOption(!nextStep.question.numeric && draftAnswer !== undefined ? draftAnswer : null);
-        setStage('quiz');
-      } else {
-        throw new Error('The quiz did not return a question.');
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
 
   useEffect(() => {
     void (async () => {
-      if (await getAccessToken()) {
-        const state = await runSaved(startQuizSession);
-        if (state && state.answeredCount > 0) setResumed(true);
-      } else {
-        await load({}, []);
+      if (!(await getAccessToken())) {
+        setNeedLogin(true);
+        return;
       }
+      const state = await run(startSmartQuiz);
+      if (state && state.answeredCount > 0) setResumed(true);
     })();
-  }, [load, runSaved]);
+  }, [run]);
 
   function answer(value: number) {
     const id = step?.question?.id;
-    if (!id || busy || answerPending.current) return;
+    if (!id || !sessionId || busy || answerPending.current) return;
     answerPending.current = true;
     setResumed(false);
-    const done = sessionId
-      ? runSaved(() => answerQuizQuestion(sessionId, id, value))
-      : load({ ...answers, [id]: value }, [...order, id]);
-    void done.finally(() => {
+    void run(() => answerSmartQuiz(sessionId, id, value), false, '답변을 저장하지 못했습니다').finally(() => {
       answerPending.current = false;
     });
   }
 
   function back() {
-    if (sessionId) {
-      if (!answeredCount || busy) return;
-      setResumed(false);
-      void runSaved(() => undoLastQuizAnswer(sessionId), true);
-      return;
-    }
-    const last = order.at(-1);
-    if (!last || busy) return;
-    const previousAnswers = { ...answers };
-    const draftAnswer = previousAnswers[last];
-    delete previousAnswers[last];
-    void load(previousAnswers, order.slice(0, -1), draftAnswer);
+    if (!sessionId || !answeredCount || busy) return;
+    setResumed(false);
+    void run(() => undoSmartQuiz(sessionId), true, '이전 질문으로 돌아가지 못했습니다');
   }
 
-  function restart() {
-    setReport(null);
+  async function restart() {
+    const ok = await confirmAction('처음부터 다시 할까요?', '지금까지 입력한 답변은 사용되지 않습니다.', '다시 시작');
+    if (!ok) return;
     setStep(null);
-    setAnswers({});
-    setOrder([]);
     setSelectedOption(null);
     setNumberInput('');
-    setSaved(false);
     setResumed(false);
-    setStage('quiz');
-    if (sessionId) void runSaved(restartQuizSession);
-    else void load({}, []);
+    void run(restartSmartQuiz, false, '퀴즈를 다시 시작하지 못했습니다');
   }
 
-  if (stage === 'report' && report) return <ReportView report={report} onRestart={restart} saved={saved} />;
+  if (needLogin) {
+    return (
+      <main className="flex min-h-screen w-full flex-col items-center justify-center gap-5 bg-[#f8f7f2] px-6 text-center font-sans text-[#3b3b3b]">
+        <p className="max-w-[420px] text-[17px] leading-relaxed">퀴즈를 진행하려면 로그인이 필요합니다.</p>
+        <Link
+          href="/login"
+          className="flex min-h-[56px] w-full max-w-[420px] items-center justify-center rounded-[20px] bg-[#a9dfbd] px-5 text-[16px] font-semibold transition-colors hover:bg-[#91d3aa]"
+        >
+          로그인
+        </Link>
+      </main>
+    );
+  }
 
   const question = step?.question;
-  const currentQuestionNumber = (sessionId ? answeredCount : order.length) + 1;
-  const canGoBack = sessionId ? answeredCount > 0 : order.length > 0;
+  const canGoBack = answeredCount > 0;
   const numeric = question?.numeric;
   const parsedNumber = Number(numberInput);
+  // Same rules as the backend (v9ValidateAnswer): inside min–max; whole number when min is 1 (10_설문입력 K).
   const numberIsValid = Boolean(
-    numberInput !== '' && numeric && parsedNumber >= numeric.min && parsedNumber <= numeric.max,
+    numberInput !== '' &&
+      numeric &&
+      Number.isFinite(parsedNumber) &&
+      parsedNumber >= numeric.min &&
+      parsedNumber <= numeric.max &&
+      (numeric.min !== 1 || Number.isInteger(parsedNumber)),
   );
+  const numberHint =
+    numeric && numberInput !== '' && !numberIsValid
+      ? numeric.min === 1 && Number.isFinite(parsedNumber) && !Number.isInteger(parsedNumber)
+        ? '정수로 입력해 주세요.'
+        : `${numeric.min}~${numeric.max} ${numeric.unit} 사이로 입력해 주세요.`
+      : null;
   const progress = Math.min(100, Math.max(0, step?.progress ?? 0));
 
   return (
@@ -223,13 +199,6 @@ export function Quiz() {
           </div>
         )}
 
-        {/* At the start (or when continuing), so a quiz isn't saved into someone else's account. */}
-        {sessionId && (answeredCount === 0 || resumed) && (
-          <div className="mb-6">
-            <LoggedInAs korean />
-          </div>
-        )}
-
         {resumed && (
           <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-[#cfe8d8] bg-[#eef8f1] px-4 py-3 text-sm text-[#3d7a55]">
             <span>저장된 퀴즈를 이어서 진행합니다.</span>
@@ -245,13 +214,24 @@ export function Quiz() {
         )}
 
         {!question ? (
-          <p className="my-auto text-center text-base text-[#777]">퀴즈를 불러오는 중…</p>
+          error && !busy ? (
+            <div className="my-auto flex flex-col items-center gap-4 text-center">
+              <p className="text-base text-[#777]">퀴즈를 불러오지 못했습니다.</p>
+              <button
+                type="button"
+                onClick={() => void run(startSmartQuiz)}
+                className="min-h-[56px] w-full max-w-[320px] rounded-[20px] bg-[#a9dfbd] px-5 text-[16px] font-semibold text-[#3b3b3b] transition-colors hover:bg-[#91d3aa]"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : (
+            <p className="my-auto text-center text-base text-[#777]">퀴즈를 불러오는 중…</p>
+          )
         ) : (
           <>
             <section aria-labelledby="quiz-question" className="flex flex-1 flex-col">
-              <p className="mb-4 text-lg font-semibold text-[#82c99c]">
-                질문 {currentQuestionNumber}
-              </p>
+              <p className="mb-4 text-lg font-semibold text-[#82c99c]">진행률 약 {progress}%</p>
               <h1 id="quiz-question" className="m-0 text-[30px] font-medium leading-[1.25] tracking-[-.025em] text-[#3b3b3b] sm:text-[34px]">
                 {question.text}
               </h1>
@@ -271,6 +251,8 @@ export function Quiz() {
                       autoFocus
                       type="number"
                       inputMode="decimal"
+                      // any decimal is allowed; the whole-number rule (min 1) is checked by numberIsValid
+                      step="any"
                       min={numeric.min}
                       max={numeric.max}
                       value={numberInput}
@@ -281,6 +263,11 @@ export function Quiz() {
                     />
                     <span className="ml-3 shrink-0 text-[18px] text-[#74746f]">{numeric.unit}</span>
                   </div>
+                  {numberHint && (
+                    <p role="alert" className="mt-3 px-2 text-sm text-rose-600">
+                      {numberHint}
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={!numberIsValid || busy}
@@ -307,7 +294,7 @@ export function Quiz() {
                               : 'border-[#d2d1cc] bg-transparent text-[#555550] hover:bg-white/70'
                           }`}
                         >
-                          {option}
+                          {option.replace(/\s+/g, ' ')}
                         </button>
                       );
                     })}
@@ -315,7 +302,7 @@ export function Quiz() {
                   <button
                     type="button"
                     disabled={selectedOption === null || busy}
-                    onClick={() => selectedOption !== null && answer(selectedOption)}
+                    onClick={() => selectedOption !== null && answer(selectedOption + 1)}
                     className="mt-auto min-h-[70px] w-full rounded-[20px] bg-[#a9dfbd] px-5 text-[19px] font-medium text-[#3b3b3b] transition-colors hover:bg-[#91d3aa] disabled:cursor-not-allowed disabled:bg-[#e4e3de] disabled:text-[#999]"
                   >
                     {busy ? '불러오는 중…' : '다음 질문'}
