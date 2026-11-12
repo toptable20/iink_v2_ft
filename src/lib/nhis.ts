@@ -38,8 +38,10 @@ export interface Checkup {
 export interface CompleteResult {
   mode: HyphenMode;
   checkups: Checkup[];
-  // The saved lookup (nhisCheckups); null if the server could not save it.
+  // The saved lookup (nhisCheckups); null if the server could not save it, or nothing to save.
   savedId: string | null;
+  // Approved, but NHIS has no checkup record for this person (nothing saved).
+  noRecords?: boolean;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

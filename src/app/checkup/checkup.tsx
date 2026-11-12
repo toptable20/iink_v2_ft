@@ -541,7 +541,29 @@ export function CheckupLookup() {
         </div>
       )}
 
-      {result && (
+      {result && result.checkups.length === 0 && (
+        // Approved in the app, but NHIS has no checkup record for this person. Nothing was saved.
+        <div className="mt-7 rounded-2xl border border-[#e9e7df] bg-white px-6 py-7 sm:px-8" role="status">
+          <p className="text-[17px] font-semibold text-[#3b3b3b]">조회된 건강검진 기록이 없습니다</p>
+          <p className="mt-3 text-[15px] leading-7 text-[#5f5e58]">
+            본인인증은 완료되었지만, 국민건강보험공단에 이 정보로 조회되는 건강검진 결과가 없습니다. 건강검진을 받은 적이 없거나 아직 결과가 등록되지 않았을 수 있습니다.
+          </p>
+          <p className="mt-2 text-[15px] leading-7 text-[#5f5e58]">건강검진 결과 없이도 스마트 퀴즈만으로 결과를 받을 수 있습니다.</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/quiz"
+              className="inline-flex min-h-[52px] items-center rounded-full bg-[#a9dfbd] px-6 text-[15px] font-semibold text-[#3b3b3b] transition-colors hover:bg-[#91d3aa]"
+            >
+              퀴즈로 계속하기
+            </Link>
+            <button type="button" onClick={reset} className="min-h-[52px] rounded-full border border-[#a9dfbd] bg-white px-5 text-[15px] font-semibold text-[#3d7a55] transition-colors hover:bg-[#eef8f1]">
+              정보 확인 후 다시 조회하기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {result && result.checkups.length > 0 && (
         <div className="mt-6">
           {result.savedId ? (
             <>
@@ -551,10 +573,7 @@ export function CheckupLookup() {
           ) : (
             <p className="text-sm text-red-700">결과를 저장하지 못했습니다. iink 팀에 문의해 주세요.</p>
           )}
-          {result.checkups.length === 0 ? (
-            <p className="mt-5 rounded-2xl bg-white px-5 py-4 text-[15px] text-[#5f5e58]">조회된 건강검진 결과가 없습니다.</p>
-          ) : (
-            result.checkups.map((checkup, i) => (
+          {result.checkups.map((checkup, i) => (
               <section key={`${checkup.year}-${i}`} className="mt-6">
                 {/* Checkup-level fields as sent: 년도, 판정, 검진기관, 소견 */}
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm sm:text-base">
@@ -592,8 +611,7 @@ export function CheckupLookup() {
                   </table>
                 </div>
               </section>
-            ))
-          )}
+          ))}
           <button type="button" onClick={reset} className="mt-7 min-h-[52px] rounded-full border border-[#a9dfbd] bg-white px-5 text-[15px] font-semibold text-[#3d7a55] transition-colors hover:bg-[#eef8f1]">
             다시 조회하기
           </button>
