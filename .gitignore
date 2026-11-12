@@ -50,3 +50,6 @@ next-env.d.ts
 
 # app binary: served separately, not stored in git
 /public/iink.apk
+
+# Markdown notes stay local, never on GitHub
+*.md
