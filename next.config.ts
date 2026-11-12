@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   // Lets other devices on the office Wi-Fi use the dev site through this PC's IP.
   allowedDevOrigins: ['192.168.219.52'],
+  experimental: {
+    // The /api proxy cuts requests after 30 s by default. An NHIS lookup stays open while the person
+    // approves on their phone (backend allows 5 min), so allow a little more than that.
+    proxyTimeout: 310_000,
+  },
   // Browser calls /api/... on the same domain; Next.js passes them to the backend.
   // Production builds set NEXT_PUBLIC_API_BASE_URL=/api, so no backend port is public and no CORS is needed.
   async rewrites() {
