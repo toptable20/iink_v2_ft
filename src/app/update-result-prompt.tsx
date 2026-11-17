@@ -8,6 +8,8 @@ import { InConnectSheet, UpdateCheckRows, useUpdateCheck } from './update-check'
 // Shown after new data is connected (checkup lookup, watch sync) on /checkup and /devices: the saved result does
 // not change by itself. It first checks what a new result would use (✓ / ✕ and why) and offers the update only
 // when that adds something. Inside the sheet over the report it hides: the report has its own check and button.
+// Data counts only when connected for the latest quiz (in its report), so the backend's check never offers the
+// update for a source that quiz did not connect, and createMySmartQuizResult would not use it either.
 export function UpdateResultPrompt({ what }: { what: string }) {
   const inSheet = useContext(InConnectSheet);
   const kind = what.includes('검진') ? 'checkup' : 'watch';

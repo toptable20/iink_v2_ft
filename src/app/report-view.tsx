@@ -9,6 +9,7 @@ import { UpdateCheckRows, useUpdateCheck } from './update-check';
 import { ChangeSummary, Changed, NewTag, changedRow, diffReports } from './report-compare';
 import { UsedData } from './used-data';
 import { ProfileCard } from './profile-card';
+import { NutrientReport } from './nutrient-report';
 
 const card = 'rounded-[28px] border border-[#e9e7df] bg-[#fbfaf7] px-5 py-7 sm:px-8 sm:py-9';
 
@@ -95,9 +96,11 @@ function Table({ head, children }: { head: string[]; children: ReactNode }) {
   );
 }
 
-// onUpdate: make a NEW result from the latest quiz + current checkup/watch data (this one is kept).
+// onUpdate: make a NEW result from the latest quiz + the checkup/watch data connected for THIS quiz (this one is kept).
 // The 데이터 추가 box checks what a new result would use (engine dry run on the backend): ✓ / ✕ per source,
 // and the update button works only when a new result would add something.
+// Connections belong to one quiz attempt: 검진 연결 / 워치 연결 here, then closing the sheet, connects that source
+// for this quiz only. A new quiz starts with nothing connected, even when the account still has a linked app.
 // updatedNotice: shown once after an update, e.g. "설문 + 워치 데이터를 반영해 결과를 업데이트했습니다."
 // Only the latest result can add data, update and order; older results are history (the report body stays as saved).
 export function ReportView({
@@ -124,6 +127,14 @@ export function ReportView({
   const [sheet, setSheet] = useState<ConnectKind | null>(null);
   const showData = Boolean(onUpdate && report.isLatest);
   const { check, loading: checking, reload, canUpdate } = useUpdateCheck(String(report._id), showData);
+
+  // * The connect sheet closed. Closing alone connects nothing: the sheet's own "이 결과에 연결하기" button marks the
+  //   source for THIS quiz (connected = true). Either way the check runs again: while the sheet was open the app may
+  //   have synced or a new NHIS lookup may have finished, so the box and the button must follow the backend now.
+  function closeSheet() {
+    setSheet(null);
+    reload();
+  }
   // after an update the new result arrives with a new id, so the check runs again against it
   const session = useSession();
   const memberName = session?.member.memberNick.trim() || '';
@@ -245,6 +256,8 @@ export function ReportView({
           </p>
         </section>
 
+        <NutrientReport report={report} />
+
         <section className={card}>
           <SectionTitle>우선 영양소 Top 5</SectionTitle>
           <Table head={['영양소', '요구지수', '주요 근거 Topic', '1회 목표량', '실제 공급량', '단위']}>
@@ -349,15 +362,7 @@ export function ReportView({
             {check && !canUpdate && <p className="mt-2 text-xs text-[#85847e]">새로 반영할 데이터가 없어요. 검진이나 워치를 연결하면 업데이트할 수 있어요.</p>}
           </section>
         )}
-        {sheet && (
-          <ConnectSheet
-            kind={sheet}
-            onClose={() => {
-              setSheet(null);
-              reload();
-            }}
-          />
-        )}
+        {sheet && <ConnectSheet kind={sheet} resultId={String(report._id)} onClose={closeSheet} />}
 
         <button
           onClick={onRestart}

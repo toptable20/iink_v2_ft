@@ -37,6 +37,26 @@ export interface SmartQuizTopNutrient {
   unit: string;
 }
 
+// One of the engine's nutrients (Excel 42_영양소요구량): every nutrient in the config, not only the Top 5.
+// correctedNeed 0–1 (보정 요구지수), target = daily target (0 when the need is under the Excel's supply line), rni = KDRI.
+export interface SmartQuizNutrient {
+  name: string;
+  unit: string;
+  correctedNeed: number;
+  target: number;
+  rni: number;
+  // 24_설문영양소섭취지수 (0–100); null for minerals (the sheet has none) or when N01–N07 are not all answered
+  intakeIndex: number | null;
+}
+
+// One row of 24_설문영양소섭취지수: relative intake index 0–100 (not an amount, not % of the recommended amount)
+export interface SmartQuizIntakeIndex {
+  key: string;
+  value: number | null;
+  // question ids (N01–N07) adding the most to this row for this user, top 2 (null on older results)
+  sources?: string[] | null;
+}
+
 export interface SmartQuizInk {
   id: string;
   name: string;
@@ -92,6 +112,11 @@ export interface SmartQuizResult {
     } | null;
     topics: SmartQuizTopic[];
     topNutrientRows: SmartQuizTopNutrient[];
+    nutrients: SmartQuizNutrient[];
+    // every row of sheet 24 (carbs, fat, vitamin K… too); null on results saved before 2026-11-17
+    intakeIndexes?: SmartQuizIntakeIndex[] | null;
+    // names of the Excel Top-5 priority nutrients (02_결과요약 A18:A22)
+    topNutrients: string[];
     ink: SmartQuizInk[];
     inkTotalG: number;
     product: SmartQuizProduct;
@@ -118,7 +143,7 @@ interface RawState {
   lastAnswerValue: number | null;
 }
 
-const RESULT_FIELDS = `_id sessionId createdAt evalDate isLatest usedSources usedSourcesLabel previousResultId
+export const RESULT_FIELDS = `_id sessionId createdAt evalDate isLatest usedSources usedSourcesLabel previousResultId
   changesFromPrevious { topic from to }
   result {
     status notice bmi bmiSource
@@ -126,6 +151,9 @@ const RESULT_FIELDS = `_id sessionId createdAt evalDate isLatest usedSources use
     profile { sex age heightCm weightKg bmiCut { low border high } }
     topics { topic displayLevel levelNote score confidence sourcesUsed floorReason stage }
     topNutrientRows { rank name correctedNeed mainTopic perServing supplied suppliedText unit }
+    nutrients { name unit correctedNeed target rni intakeIndex }
+    intakeIndexes { key value sources }
+    topNutrients
     ink { id name g ml note }
     inkTotalG
     product { offered1 offered2 combined plan lineupText }
@@ -171,7 +199,7 @@ export async function undoSmartQuiz(sessionId: string): Promise<SmartQuizState> 
   return toState(data.undoSmartQuiz);
 }
 
-// New result from the latest finished quiz and connected data.
+// New result from the latest finished quiz and the data connected FOR THAT QUIZ (connectSmartQuizSource).
 export async function createMySmartQuizResult(): Promise<SmartQuizResult> {
   const data = await gql<{ createMySmartQuizResult: SmartQuizResult }>(
     `mutation { createMySmartQuizResult { ${RESULT_FIELDS} } }`,
@@ -208,12 +236,18 @@ export interface SmartQuizWatchStatus {
 }
 
 // What a new result would use (engine run on my current data, not saved) and what it adds to a result.
+// Only data connected for the latest quiz attempt counts (each attempt starts with nothing connected).
 export interface SmartQuizNewData {
   checkup: boolean;
   watch: boolean;
   // 설문 / 검진 / 워치
   wouldUse: string[];
+  // connected for THIS quiz attempt in its report (the account's NHIS lookup / linked app alone does not count)
+  checkupConnected: boolean;
+  watchConnected: boolean;
 }
+
+const NEW_DATA_FIELDS = 'checkup watch wouldUse checkupConnected watchConnected';
 
 // Read only: my latest NHIS checkup and whether it can be used (only the latest one counts; over 24 months it cannot).
 export async function getMySmartQuizCheckupStatus(): Promise<SmartQuizCheckupStatus> {
@@ -234,10 +268,21 @@ export async function getMySmartQuizWatchStatus(): Promise<SmartQuizWatchStatus>
 // Read only: what a new result would use, and whether that adds anything to this result (default: my latest).
 export async function getSmartQuizNewData(resultId: string | null = null): Promise<SmartQuizNewData> {
   const data = await gql<{ getSmartQuizNewData: SmartQuizNewData }>(
-    `query NewData($resultId: String) { getSmartQuizNewData(resultId: $resultId) { checkup watch wouldUse } }`,
+    `query NewData($resultId: String) { getSmartQuizNewData(resultId: $resultId) { ${NEW_DATA_FIELDS} } }`,
     { resultId },
   );
   return data.getSmartQuizNewData;
+}
+
+// In the latest result's report: connect the checkup or the watch for THIS quiz attempt (when its connect sheet
+// closes). Only then can 결과 업데이트 use it. Returns the check against the latest result.
+// resultId: the report the user connects from; refused unless it is still the member's latest result.
+export async function connectSmartQuizSource(source: 'checkup' | 'watch', resultId: string): Promise<SmartQuizNewData> {
+  const data = await gql<{ connectSmartQuizSource: SmartQuizNewData }>(
+    `mutation Connect($source: String!, $resultId: String!) { connectSmartQuizSource(source: $source, resultId: $resultId) { ${NEW_DATA_FIELDS} } }`,
+    { source, resultId },
+  );
+  return data.connectSmartQuizSource;
 }
 
 export async function getSmartQuizResult(resultId: string): Promise<SmartQuizResult> {

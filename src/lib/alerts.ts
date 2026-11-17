@@ -23,6 +23,10 @@ const EXACT: Record<string, string> = {
   'sessionId is not valid': '진행 중인 퀴즈를 찾을 수 없습니다. 퀴즈를 다시 시작해 주세요.',
   'examDate must be YYYY-MM-DD': '검진일을 YYYY-MM-DD 형식으로 입력해 주세요.',
   'No checkup values given.': '검진 수치를 하나 이상 입력해 주세요.',
+  'This report is not your latest result. Please open your latest result.': '이 결과는 최신 결과가 아닙니다. 최신 결과를 열어 다시 연결해 주세요.',
+  'Nothing new to add: connect a checkup or the watch in this report first.': '새로 반영할 데이터가 없습니다. 이 결과에 검진이나 워치를 연결한 뒤 다시 눌러 주세요.',
+  'Nothing to connect yet: the watch is not linked, or has no usable days in the last 7 days.': '연결할 워치 데이터가 아직 없어요. 앱에서 동기화한 뒤 다시 시도해 주세요.',
+  'Nothing to connect yet: there is no usable NHIS checkup.': '연결할 건강검진 데이터가 아직 없어요. 검진을 조회한 뒤 다시 시도해 주세요.',
 };
 
 export function koreanError(message: string): string {

@@ -53,14 +53,17 @@ interface Row {
   text: string;
 }
 
-// One line per optional source: ✓ will be / is used, ✕ cannot be used (and why), ○ not connected.
+// One line per optional source: ✓ used in this result, + can be added with an update, ✕ cannot be used (and why), ○ not connected.
+// Connections belong to one quiz attempt: a source not connected in THIS quiz's report is ○ 연결 안 됨, even when the
+// account has an NHIS lookup or a linked app (a new quiz starts with nothing connected).
 export function checkRows(c: UpdateCheck): Row[] {
   const usesCheckup = c.newData.wouldUse.includes('검진');
   const usesWatch = c.newData.wouldUse.includes('워치');
 
   const when = c.checkup.examDate ? `${c.checkup.examDate} 검진` : c.checkup.year ? `${c.checkup.year} 검진` : '검진';
   let checkup: Row;
-  if (usesCheckup) checkup = { kind: 'checkup', label: '건강검진', mark: c.newData.checkup ? 'new' : 'ok', text: `${when} · ${c.newData.checkup ? '업데이트하면 반영돼요' : '이 결과에 반영됨'}` };
+  if (!c.newData.checkupConnected) checkup = { kind: 'checkup', label: '건강검진', mark: 'off', text: '연결 안 됨' };
+  else if (usesCheckup) checkup = { kind: 'checkup', label: '건강검진', mark: c.newData.checkup ? 'new' : 'ok', text: `${when} · ${c.newData.checkup ? '아직 반영 안 됨 · 결과 업데이트를 누르면 추가돼요' : '이 결과에 반영됨'}` };
   else if (c.checkup.status === 'none') checkup = { kind: 'checkup', label: '건강검진', mark: 'off', text: '연결 안 됨' };
   else if (c.checkup.status === 'too-old') checkup = { kind: 'checkup', label: '건강검진', mark: 'no', text: `${when}은 24개월이 지나 사용할 수 없어요` };
   else if (c.checkup.status === 'bad-exam-date') checkup = { kind: 'checkup', label: '건강검진', mark: 'no', text: '검진일을 확인할 수 없어 사용할 수 없어요' };
@@ -69,7 +72,8 @@ export function checkRows(c: UpdateCheck): Row[] {
 
   const days = Math.max(0, ...c.watch.items.map((i) => i.days));
   let watch: Row;
-  if (usesWatch) watch = { kind: 'watch', label: '워치', mark: c.newData.watch ? 'new' : 'ok', text: `최근 7일 중 ${days}일 측정 · ${c.newData.watch ? '업데이트하면 반영돼요' : '이 결과에 반영됨'}` };
+  if (!c.newData.watchConnected) watch = { kind: 'watch', label: '워치', mark: 'off', text: '연결 안 됨' };
+  else if (usesWatch) watch = { kind: 'watch', label: '워치', mark: c.newData.watch ? 'new' : 'ok', text: `최근 7일 중 ${days}일 측정 · ${c.newData.watch ? '아직 반영 안 됨 · 결과 업데이트를 누르면 추가돼요' : '이 결과에 반영됨'}` };
   else if (!c.watch.connected) watch = { kind: 'watch', label: '워치', mark: 'off', text: '연결 안 됨' };
   else if (days < c.watch.minDays) watch = { kind: 'watch', label: '워치', mark: 'no', text: `최근 7일 중 ${days}일 측정 · ${c.watch.minDays}일 이상 필요해요` };
   else watch = { kind: 'watch', label: '워치', mark: 'no', text: `최근 7일 중 ${days}일 측정 · 반영할 수 있는 측정 항목이 부족해요` };
@@ -77,9 +81,10 @@ export function checkRows(c: UpdateCheck): Row[] {
   return [checkup, watch];
 }
 
+// ✓ only for data THIS result already uses; + for data that can still be added with 결과 업데이트.
 const MARK: Record<Mark, { sign: string; cls: string }> = {
-  new: { sign: '✓', cls: 'bg-[#55aa7a] text-white' },
-  ok: { sign: '✓', cls: 'bg-[#dceee6] text-[#3d7a55]' },
+  new: { sign: '+', cls: 'bg-[#fff1d6] text-[#a26a12]' },
+  ok: { sign: '✓', cls: 'bg-[#55aa7a] text-white' },
   no: { sign: '✕', cls: 'bg-[#f6e3e1] text-[#b4534a]' },
   off: { sign: '○', cls: 'bg-[#ecebe6] text-[#85847e]' },
 };
