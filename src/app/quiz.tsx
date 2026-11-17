@@ -22,6 +22,104 @@ function ChevronLeft() {
   );
 }
 
+// STEP 0 choices (team leader 2026-11-17): the quiz is always on; checkup / watch only decide which connect sheets
+// open over the report when the quiz is done. The engine is unchanged: the first result is quiz-only, connected data
+// comes in with 결과 업데이트, and a user with no data just closes the sheet and keeps the quiz result.
+type Extra = 'checkup' | 'watch';
+const choiceKey = (sessionId: string) => `iink_quiz_connect:${sessionId}`;
+
+function saveChoice(sessionId: string, extras: Extra[]) {
+  try {
+    sessionStorage.setItem(choiceKey(sessionId), extras.join(','));
+  } catch {
+    // without storage the sheets just do not open by themselves; 데이터 추가 in the report still works
+  }
+}
+
+function readChoice(sessionId: string): Extra[] {
+  try {
+    const v = sessionStorage.getItem(choiceKey(sessionId)) ?? '';
+    return v.split(',').filter((x): x is Extra => x === 'checkup' || x === 'watch');
+  } catch {
+    return [];
+  }
+}
+
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${checked ? 'border-[#3b3b3b] bg-[#3b3b3b] text-white' : 'border-[#9b9b96] bg-white'}`}
+    >
+      {checked && (
+        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+          <path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function Intro({ onStart }: { onStart: (extras: Extra[]) => void }) {
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const toggle = (x: Extra) => setExtras((prev) => (prev.includes(x) ? prev.filter((v) => v !== x) : [...prev, x]));
+  const options: { id: 'quiz' | Extra; title: string; desc: string; tag: string }[] = [
+    { id: 'quiz', title: '1. Smart Quiz', desc: '식습관 · 생활 습관 5분', tag: '기본' },
+    { id: 'checkup', title: '2. PHR 연동', desc: '건강검진 결과 · 의료 마이데이터 동의', tag: '선택' },
+    { id: 'watch', title: '3. 웨어러블 연동', desc: '활동량 · 수면 · 심박 자동 수집', tag: '선택' },
+  ];
+  return (
+    <section aria-labelledby="quiz-intro" className="flex flex-1 flex-col">
+      <p className="text-sm font-semibold text-[#82c99c]">
+        STEP 0 · 데이터 연결 <span className="text-[#85847e]">(복수 선택)</span>
+      </p>
+      <h1 id="quiz-intro" className="mt-3 text-[28px] font-medium leading-[1.3] tracking-[-.025em] sm:text-[32px]">
+        분석에 사용할 데이터를 선택해 주세요
+      </h1>
+      <div className="mt-8 flex flex-col gap-3.5">
+        {options.map((o) => {
+          const fixed = o.id === 'quiz';
+          const checked = fixed || extras.includes(o.id as Extra);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              aria-disabled={fixed}
+              onClick={() => !fixed && toggle(o.id as Extra)}
+              className={`flex min-h-[84px] w-full items-center gap-4 rounded-[20px] border px-5 py-4 text-left transition-colors ${
+                checked ? 'border-[#a9dfbd] bg-[#eef8f1]' : 'border-[#d2d1cc] bg-transparent hover:bg-white/70'
+              } ${fixed ? 'cursor-default' : ''}`}
+            >
+              <CheckBox checked={checked} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[18px] font-semibold">{o.title}</span>
+                <span className="mt-1 block text-sm text-[#74746f]">{o.desc}</span>
+              </span>
+              <span
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${fixed ? 'bg-[#3b3b3b] text-white' : 'border border-[#3b3b3b] text-[#3b3b3b]'}`}
+              >
+                {o.tag}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-5 break-keep text-sm leading-relaxed text-[#85847e]">
+        Smart Quiz는 항상 진행됩니다. 선택한 데이터는 퀴즈가 끝난 뒤 연결하며, 연결할 데이터가 없으면 설문만으로 분석합니다.
+      </p>
+      <button
+        type="button"
+        onClick={() => onStart(extras)}
+        className="mt-auto min-h-[70px] w-full rounded-[20px] bg-[#a9dfbd] px-5 text-[19px] font-medium text-[#3b3b3b] transition-colors hover:bg-[#91d3aa]"
+      >
+        시작하기
+      </button>
+    </section>
+  );
+}
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7" aria-hidden="true">
@@ -42,6 +140,8 @@ export function Quiz() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [resumed, setResumed] = useState(false);
+  // STEP 0 is shown before the first question of a new attempt (not when a saved quiz is resumed)
+  const [intro, setIntro] = useState(false);
 
   // draftAnswer: after going back, the removed answer (a code for choices, the number otherwise).
   const applyState = useCallback(
@@ -50,7 +150,9 @@ export function Quiz() {
       setAnsweredCount(state.answeredCount);
       if (state.result) {
         // replace: back from the report must not land on the finished quiz again
-        router.replace(`/results?id=${state.result._id}&saved=1`);
+        // connect = the STEP 0 choices: the report opens those connect sheets by itself
+        const extras = readChoice(state.sessionId);
+        router.replace(`/results?id=${state.result._id}&saved=1${extras.length ? `&connect=${extras.join(',')}` : ''}`);
         return;
       }
       const question = state.step.question;
@@ -92,6 +194,7 @@ export function Quiz() {
       }
       const state = await run(startSmartQuiz);
       if (state && state.answeredCount > 0) setResumed(true);
+      else if (state && !state.result) setIntro(true);
     })();
   }, [run]);
 
@@ -118,7 +221,12 @@ export function Quiz() {
     setSelectedOption(null);
     setNumberInput('');
     setResumed(false);
-    void run(restartSmartQuiz, false, '퀴즈를 다시 시작하지 못했습니다');
+    void run(restartSmartQuiz, false, '퀴즈를 다시 시작하지 못했습니다').then((state) => state && !state.result && setIntro(true));
+  }
+
+  function startAfterIntro(extras: Extra[]) {
+    if (sessionId) saveChoice(sessionId, extras);
+    setIntro(false);
   }
 
   if (needLogin) {
@@ -172,7 +280,8 @@ export function Quiz() {
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="mx-auto flex h-[76px] w-full max-w-[480px] items-center justify-between px-6">
+        {/* STEP 0 has no back / close: the row keeps its height so the page does not jump when the quiz starts */}
+        <div className={`mx-auto flex h-[76px] w-full max-w-[480px] items-center justify-between px-6 ${intro ? 'invisible' : ''}`} aria-hidden={intro}>
           <button
             type="button"
             onClick={back}
@@ -213,7 +322,9 @@ export function Quiz() {
           </div>
         )}
 
-        {!question ? (
+        {intro && question ? (
+          <Intro onStart={startAfterIntro} />
+        ) : !question ? (
           error && !busy ? (
             <div className="my-auto flex flex-col items-center gap-4 text-center">
               <p className="text-base text-[#777]">퀴즈를 불러오지 못했습니다.</p>

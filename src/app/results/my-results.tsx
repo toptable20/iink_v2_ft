@@ -13,6 +13,7 @@ import {
 import { koreanError } from '@/lib/alerts';
 import { updateResultWithAlert, usedDataLabel, usedDataText } from '@/lib/update-alert';
 import { ReportView } from '../report-view';
+import type { ConnectKind } from '../connect-sheet';
 
 // An update makes a new result from the same quiz attempt; the list shows only the newest one per attempt
 // (the older ones stay saved for the "달라진 점" comparison and orders). A new quiz attempt gets its own line.
@@ -36,6 +37,14 @@ export function MyResults() {
   const params = useSearchParams();
   const openId = params.get('id');
   const justSaved = params.get('saved') === '1';
+  // STEP 0 choices from the quiz (&connect=checkup,watch): read once, then dropped from the URL so a reload does not
+  // open the connect sheets again
+  const [autoConnect] = useState<ConnectKind[]>(() =>
+    (params.get('connect') ?? '').split(',').filter((x): x is ConnectKind => x === 'checkup' || x === 'watch'),
+  );
+  useEffect(() => {
+    if (openId && params.get('connect') !== null) router.replace(`/results?id=${openId}${justSaved ? '&saved=1' : ''}`);
+  }, [openId, params, justSaved, router]);
   // true when the open report was opened from this list (then X = browser back)
   const fromList = useRef(false);
   const [reports, setReports] = useState<SmartQuizResult[] | null>(null);
@@ -108,6 +117,7 @@ export function MyResults() {
       <ReportView
         report={open}
         saved={justSaved}
+        autoConnect={justSaved ? autoConnect : []}
         onClose={closeReport}
         onRestart={() => router.push('/quiz')}
         onUpdate={createNew}

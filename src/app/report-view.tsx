@@ -108,6 +108,7 @@ export function ReportView({
   onRestart,
   onClose,
   saved = false,
+  autoConnect = [],
   onUpdate,
   updating = false,
   updatedNotice,
@@ -118,21 +119,28 @@ export function ReportView({
   // X: back to the results list (without it, X goes home)
   onClose?: () => void;
   saved?: boolean;
+  // STEP 0 choices of the quiz just finished: these connect sheets open one after the other over the new report
+  autoConnect?: ConnectKind[];
   onUpdate?: () => void;
   updating?: boolean;
   updatedNotice?: string | null;
   // the result made just before this one: changed values are marked (green, bold, old value in grey)
   previous?: SmartQuizResult | null;
 }) {
-  const [sheet, setSheet] = useState<ConnectKind | null>(null);
   const showData = Boolean(onUpdate && report.isLatest);
+  // the STEP 0 sheets still to open after the current one (only on the member's latest result)
+  const chosen = showData ? autoConnect : [];
+  const [sheet, setSheet] = useState<ConnectKind | null>(chosen[0] ?? null);
+  const [queue, setQueue] = useState<ConnectKind[]>(chosen.slice(1));
   const { check, loading: checking, reload, canUpdate } = useUpdateCheck(String(report._id), showData);
 
   // * The connect sheet closed. Closing alone connects nothing: the sheet's own "이 결과에 연결하기" button marks the
   //   source for THIS quiz (connected = true). Either way the check runs again: while the sheet was open the app may
   //   have synced or a new NHIS lookup may have finished, so the box and the button must follow the backend now.
+  //   A STEP 0 choice still waiting opens next.
   function closeSheet() {
-    setSheet(null);
+    setSheet(queue[0] ?? null);
+    setQueue(queue.slice(1));
     reload();
   }
   // after an update the new result arrives with a new id, so the check runs again against it
@@ -193,7 +201,10 @@ export function ReportView({
         )}
         {saved && (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#cfe8d8] bg-[#eef8f1] px-5 py-4 text-sm text-[#3d7a55] sm:text-base">
-            <span>결과가 저장되었습니다.</span>
+            <span>
+              결과가 저장되었습니다.
+              {chosen.length > 0 && ' 선택하신 데이터를 연결하면 결과 업데이트로 반영됩니다. 연결할 데이터가 없으면 설문 결과가 그대로 유지됩니다.'}
+            </span>
             <Link href="/results" className="shrink-0 font-semibold underline-offset-4 hover:underline">
               내 결과 보기
             </Link>
