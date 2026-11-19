@@ -7,7 +7,6 @@ import type { SmartQuizResult } from '@/lib/smart-quiz';
 import { ConnectSheet, type ConnectKind } from './connect-sheet';
 import { UpdateCheckRows, useUpdateCheck } from './update-check';
 import { ChangeSummary, Changed, NewTag, changedRow, diffReports } from './report-compare';
-import { UsedData } from './used-data';
 import { ProfileCard } from './profile-card';
 import { NutrientReport } from './nutrient-report';
 
@@ -243,7 +242,7 @@ export function ReportView({
 
         <section className={card}>
           <SectionTitle>9개 Topic</SectionTitle>
-          <Table head={['Topic', 'Level(1–10)', '최종 점수', '신뢰도', '사용 소스', '하한 사유', '판정 단계']}>
+          <Table head={['Topic', 'Level(1–10)', '최종 점수', '사용 소스', '판정 단계']}>
             {r.topics.map((t) => {
               const c = d?.topics.get(t.topic);
               return (
@@ -254,9 +253,7 @@ export function ReportView({
                     {t.levelNote && <span className="ml-1 text-xs text-[#85847e]">{t.levelNote}</span>}
                   </td>
                   <td className={`${td} tabular-nums`}><Changed was={c?.score}>{num(t.score)}</Changed></td>
-                  <td className={td}><Changed was={c?.confidence}>{t.confidence || '–'}</Changed></td>
                   <td className={td}><Changed was={c?.sources}>{t.sourcesUsed || '–'}</Changed></td>
-                  <td className={td}>{t.floorReason || '–'}</td>
                   <td className={td}><Changed was={c?.stage}>{t.stage || '–'}</Changed></td>
                 </tr>
               );
@@ -271,7 +268,7 @@ export function ReportView({
 
         <section className={card}>
           <SectionTitle>우선 영양소 Top 5</SectionTitle>
-          <Table head={['영양소', '요구지수', '주요 근거 Topic', '1회 목표량', '실제 공급량', '단위']}>
+          <Table head={['영양소', '요구지수', '주요 근거 Topic', '1회 목표량', '단위']}>
             {r.topNutrientRows.map((n) => {
               const c = d?.nutrients.get(n.name);
               return (
@@ -283,7 +280,6 @@ export function ReportView({
                   <td className={`${td} tabular-nums`}><Changed was={c?.need}>{num(n.correctedNeed)}</Changed></td>
                   <td className={td}>{n.mainTopic ?? '–'}</td>
                   <td className={`${td} tabular-nums`}><Changed was={c?.perServing}>{num(n.perServing)}</Changed></td>
-                  <td className={`${td} tabular-nums`}><Changed was={c?.supplied}>{n.suppliedText ?? num(n.supplied)}</Changed></td>
                   <td className={td}>{n.unit}</td>
                 </tr>
               );
@@ -296,13 +292,12 @@ export function ReportView({
 
         <section className={card}>
           <SectionTitle>푸디언 3.0 전송값</SectionTitle>
-          <Table head={['카트리지명', '출력(g)', '출력(ml)', '비고']}>
+          <Table head={['카트리지명', '출력(g)', '출력(ml)']}>
             {r.ink.map((i) => (
               <tr key={i.id} className={d?.ink.has(i.id) ? changedRow : undefined}>
                 <td className={`${td} font-medium`}>{i.name}</td>
                 <td className={`${td} tabular-nums`}><Changed was={d?.ink.get(i.id)}>{num(i.g)}</Changed></td>
                 <td className={`${td} tabular-nums`}>{num(i.ml)}</td>
-                <td className={td}>{i.note || '–'}</td>
               </tr>
             ))}
           </Table>
@@ -332,8 +327,6 @@ export function ReportView({
             ))}
           </div>
         </section>
-
-        <UsedData report={report} minDays={check?.watch.minDays} />
 
         {showData && (
           <section className={`rounded-2xl px-5 py-4 text-sm ${canUpdate ? 'border border-[#a9dfbd] bg-[#eef8f1]' : 'bg-white/75'}`}>

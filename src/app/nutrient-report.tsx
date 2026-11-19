@@ -26,7 +26,7 @@ import type { SmartQuizResult } from '@/lib/smart-quiz';
 // scores), so the 4-case comparison has something to compare. Intake (식사 섭취 지수): food answers only, the same
 // in all 4 cases; hidden for now so users never read two different % bars against each other.
 const SHOW_NEED = true;
-const SHOW_INTAKE = true;
+const SHOW_INTAKE = false;
 
 const PINK = '#CE99C3';
 const GREEN = '#7BC195';
@@ -148,6 +148,56 @@ export function NutrientReport({ report }: { report: SmartQuizResult }) {
     .filter((g) => g.rows.length > 0);
   if (groups.length === 0) return null;
 
+  // Need only (team leader 2026-11-19): the v1 printed-report layout. Sections 주요 영양소 / 비타민 / 무기질 with a
+  // check mark, rows in columns: name, a round bar with the need score inside, and "보충 목표량 / 권장섭취량" after it.
+  // The bar shows 영양 충분도 = 100 − 보충 필요도 (Max 2026-11-19: "vitamin E need 21 → show 79 green"), the same V9
+  // value turned around so higher = better, like the v1 report. Green at 50 or more (= need 50 or less), pink below 50
+  // (= need above 50): the same split as before, only the direction changed. Badges / amounts unchanged.
+  // Shown as a percentage in the v1 print style: pink below 50%, green from 50% (Max 2026-11-19). No legend / text.
+  if (SHOW_NEED && !SHOW_INTAKE) {
+    return (
+      <section className="flex flex-col gap-6 rounded-[28px] border border-[#e9e7df] bg-[#fbfaf7] px-5 py-7 sm:px-8 sm:py-9">
+        <h2 className="text-[18px] font-semibold sm:text-[20px]">영양소 리포트</h2>
+        {groups.map((g) => (
+          <div key={g.title}>
+            <h3 className="flex items-center gap-2 text-[16px] font-semibold sm:text-[18px]">
+              <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0" aria-hidden="true">
+                <circle cx="10" cy="10" r="10" fill="#3b3b3b" />
+                <path d="m6 10.2 2.7 2.6L14 7.5" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {g.title}
+            </h3>
+            <div className="mt-3 grid gap-x-8 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {g.rows.map(({ i, need }) => {
+                if (!need) return null;
+                const needScore = Math.round(Math.min(100, Math.max(0, need.correctedNeed * 100)));
+                const score = 100 - needScore; // 영양 충분도
+                const t = i.engine ? top.get(i.engine) : undefined;
+                return (
+                  <div key={i.engine ?? i.key} className="grid grid-cols-[5.5rem_1fr] items-center gap-2" title={`하루 보충 목표량 ${num(need.target)} ${need.unit} / 하루 권장섭취량 ${num(need.rni)} ${need.unit}`} aria-label={`${i.label}: 영양 충분도 ${score}%, 하루 보충 목표량 ${num(need.target)} ${need.unit}, 하루 권장섭취량 ${num(need.rni)} ${need.unit}`}>
+                    <span className="flex min-w-0 flex-wrap items-center gap-1 text-[13px] leading-tight sm:text-sm">
+                      <span className="font-medium">{i.label}</span>
+                      {t && <span className="rounded-full bg-[#CE99C3] px-1.5 py-px text-[10px] font-bold text-white">우선 {t.rank}</span>}
+                    </span>
+                    <div className="relative flex h-6 min-w-0 items-center rounded-full bg-[#eeede8]">
+                      <div className="flex h-full items-center rounded-full px-2.5 text-[11px] font-semibold text-[#3b3b3b] sm:text-xs" style={{ width: `${Math.max(score, 14)}%`, backgroundColor: score >= 50 ? GREEN : PINK }}>
+                        {score}%
+                      </div>
+                      <span className="absolute right-3 text-[10px] tabular-nums text-[#85847e] sm:text-[11px]">
+                        {num(need.target)}/{num(need.rni)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="text-xs leading-relaxed text-[#85847e] sm:text-sm">영양 관리 참고용이며 질병 진단·치료·예방 표현이 아닙니다.</p>
+      </section>
+    );
+  }
+
   // label + intake, or label + need + intake
   const cols = SHOW_NEED && SHOW_INTAKE ? 'grid-cols-[28%_1fr_1fr]' : 'grid-cols-[28%_1fr]';
 
@@ -225,10 +275,9 @@ export function NutrientReport({ report }: { report: SmartQuizResult }) {
                   <summary className={`grid cursor-pointer list-none ${cols} items-start gap-x-3 sm:gap-x-6`} aria-label={`${label} (자세히 보기)`}>
                     {cells}
                   </summary>
-                  <dl className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white px-3 py-2 text-[11px] sm:text-[13px]">
+                  <dl className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-white px-3 py-2 text-[11px] sm:text-[13px]">
                     <div><dt className="text-[#85847e]">주요 근거 Topic</dt><dd className="font-medium">{t.mainTopic ?? '–'}</dd></div>
                     <div><dt className="text-[#85847e]">1회 목표량</dt><dd className="font-medium tabular-nums">{num(t.perServing)} {t.unit}</dd></div>
-                    <div><dt className="text-[#85847e]">실제 공급량</dt><dd className="font-medium tabular-nums">{t.suppliedText ?? (t.supplied == null ? '–' : `${num(t.supplied)} ${t.unit}`)}</dd></div>
                   </dl>
                 </details>
               );

@@ -45,7 +45,6 @@ export function diffReports(cur: SmartQuizResult, prev: SmartQuizResult): Report
     if (!same(t.score, p.score)) d.score = fmt(p.score);
     if (!same(t.sourcesUsed, p.sourcesUsed)) d.sources = p.sourcesUsed || '–';
     if (!same(t.stage, p.stage)) d.stage = p.stage || '–';
-    if (!same(t.confidence, p.confidence)) d.confidence = p.confidence || '–';
     if (Object.keys(d).length) topics.set(t.topic, d);
     if (d.level) summary.push(`${t.topic} Level ${p.displayLevel} → ${t.displayLevel}`);
   }
@@ -61,8 +60,7 @@ export function diffReports(cur: SmartQuizResult, prev: SmartQuizResult): Report
     const d: { isNew: boolean; need?: string; perServing?: string; supplied?: string } = { isNew: false };
     if (!same(n.correctedNeed, p.correctedNeed)) d.need = fmt(p.correctedNeed);
     if (!same(n.perServing, p.perServing)) d.perServing = fmt(p.perServing);
-    if (!same(n.suppliedText ?? n.supplied, p.suppliedText ?? p.supplied)) d.supplied = p.suppliedText ?? fmt(p.supplied);
-    if (d.need || d.perServing || d.supplied) nutrients.set(n.name, d);
+    if (d.need || d.perServing) nutrients.set(n.name, d);
   }
   const curNames = new Set(a.topNutrientRows.map((n) => n.name));
   const removedNutrients = b.topNutrientRows.map((n) => n.name).filter((x) => !curNames.has(x));
