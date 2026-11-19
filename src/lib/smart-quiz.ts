@@ -95,6 +95,8 @@ export interface SmartQuizResult {
   usedSourcesLabel: string;
   previousResultId: string | null;
   changesFromPrevious: { topic: string; from: string; to: string }[];
+  // food answers behind the intake index (N01–N07), in V9's option wording; display only (missing on very old data)
+  foodAnswers?: { questionId: string; code: number; answer: string }[];
   result: {
     status: string;
     notice: string;
@@ -145,6 +147,7 @@ interface RawState {
 
 export const RESULT_FIELDS = `_id sessionId createdAt evalDate isLatest usedSources usedSourcesLabel previousResultId
   changesFromPrevious { topic from to }
+  foodAnswers { questionId code answer }
   result {
     status notice bmi bmiSource
     measured { checkup { id name unit value days status } watch { id name unit value days status } }
