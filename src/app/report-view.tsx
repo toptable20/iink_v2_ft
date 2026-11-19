@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import Swal from 'sweetalert2';
+import { GREEN, showError } from '@/lib/alerts';
+import { downloadReportPdf } from '@/lib/report-pdf';
 import { useSession } from '@/lib/auth';
 import type { SmartQuizResult } from '@/lib/smart-quiz';
 import { ConnectSheet, type ConnectKind } from './connect-sheet';
@@ -13,6 +16,16 @@ import { NutrientReport } from './nutrient-report';
 const card = 'rounded-[28px] border border-[#e9e7df] bg-[#fbfaf7] px-5 py-7 sm:px-8 sm:py-9';
 
 const dayFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+// e.g. "2026-11-19_1532": the result's date and time in Korea, for the PDF file name
+function pdfStamp(createdAt: string | Date): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(createdAt))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}_${p.hour}${p.minute}`;
+}
 
 const num = (n: number | null | undefined) => (n == null ? '–' : n.toLocaleString('ko-KR', { maximumFractionDigits: 2 }));
 
@@ -153,8 +166,35 @@ export function ReportView({
   // marks are drawn only while the switch is on
   const d = compareOn ? diff : null;
 
+  // PDF 다운로드: the report of THIS result (header + every section) as an A4 file. Left out: buttons, the 데이터 추가
+  // box and everything about the previous result (the 달라진 점 box and the green "(이전 …)" marks in the tables:
+  // the marks are switched off while the PDF is drawn, then the switch goes back to how the user had it).
+  // File name carries this result's Korean date and time, so two results of one day never share a name.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  async function savePdf() {
+    if (!pageRef.current || pdfBusy) return;
+    setPdfBusy(true);
+    void Swal.fire({ title: 'PDF를 만들고 있어요', text: '잠시만 기다려 주세요.', allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    const marksWere = compareOn;
+    try {
+      if (marksWere) {
+        setCompareOn(false);
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      }
+      await downloadReportPdf(pageRef.current, `iink_영양분석_${memberName || '회원'}_${pdfStamp(report.createdAt)}.pdf`);
+      await Swal.fire({ icon: 'success', title: 'PDF를 저장했습니다', confirmButtonText: '확인', confirmButtonColor: GREEN });
+    } catch (e) {
+      Swal.close();
+      await showError('PDF를 만들지 못했습니다', e);
+    } finally {
+      if (marksWere) setCompareOn(true);
+      setPdfBusy(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen w-full bg-[#f8f7f2] font-sans text-[#3b3b3b]">
+    <div ref={pageRef} className="min-h-screen w-full bg-[#f8f7f2] font-sans text-[#3b3b3b]">
       <header className="mx-auto flex w-full max-w-[1080px] items-center justify-between gap-4 px-5 pb-7 pt-7 sm:px-8 sm:pb-9 sm:pt-10 lg:px-10">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">
           <div className="grid h-[66px] w-[66px] shrink-0 place-items-center rounded-full bg-[#dceee6] text-[27px] font-semibold text-[#55aa7a] sm:h-[76px] sm:w-[76px] sm:text-[30px]">
@@ -167,6 +207,15 @@ export function ReportView({
             <p className="mt-2 text-sm text-[#55aa7a] sm:text-base">({asOf} 기준)</p>
           </div>
         </div>
+        <div className="flex shrink-0 items-center gap-2" data-pdf-hide>
+        <button
+          type="button"
+          onClick={() => void savePdf()}
+          disabled={pdfBusy}
+          className="rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-[#3d7a55] transition hover:bg-[#efeee8] disabled:opacity-50"
+        >
+          {pdfBusy ? 'PDF 만드는 중…' : 'PDF 다운로드'}
+        </button>
         {onClose ? (
           <button
             type="button"
@@ -185,21 +234,22 @@ export function ReportView({
             <CloseIcon />
           </Link>
         )}
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-[1080px] flex-col gap-5 px-4 pb-16 sm:gap-6 sm:px-8 lg:px-10">
         {updatedNotice && (
-          <div role="status" className="rounded-2xl border border-[#cfe8d8] bg-[#eef8f1] px-5 py-4 text-sm font-medium text-[#3d7a55] sm:text-base">
+          <div data-pdf-hide role="status" className="rounded-2xl border border-[#cfe8d8] bg-[#eef8f1] px-5 py-4 text-sm font-medium text-[#3d7a55] sm:text-base">
             {updatedNotice}
           </div>
         )}
         {!report.isLatest && (
-          <div className="rounded-2xl border border-[#e9e7df] bg-white/75 px-5 py-4 text-sm text-[#5f5e58] sm:text-base">
+          <div data-pdf-hide className="rounded-2xl border border-[#e9e7df] bg-white/75 px-5 py-4 text-sm text-[#5f5e58] sm:text-base">
             지난 결과입니다. 주문과 섭취 플랜은 최신 결과 기준입니다.
           </div>
         )}
         {saved && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#cfe8d8] bg-[#eef8f1] px-5 py-4 text-sm text-[#3d7a55] sm:text-base">
+          <div data-pdf-hide className="flex items-center justify-between gap-3 rounded-2xl border border-[#cfe8d8] bg-[#eef8f1] px-5 py-4 text-sm text-[#3d7a55] sm:text-base">
             <span>
               결과가 저장되었습니다.
               {chosen.length > 0 && ' 선택하신 데이터를 연결하면 결과 업데이트로 반영됩니다. 연결할 데이터가 없으면 설문 결과가 그대로 유지됩니다.'}
@@ -211,7 +261,10 @@ export function ReportView({
         )}
 
         {diff && previous && (
-          <ChangeSummary diff={diff} prevDate={dayFormat.format(new Date(previous.createdAt))} on={compareOn} onToggle={() => setCompareOn((v) => !v)} />
+          // website only: the PDF is a clean report of this one result
+          <div data-pdf-hide>
+            <ChangeSummary diff={diff} prevDate={dayFormat.format(new Date(previous.createdAt))} on={compareOn} onToggle={() => setCompareOn((v) => !v)} />
+          </div>
         )}
 
         <section className={card}>
@@ -329,7 +382,7 @@ export function ReportView({
         </section>
 
         {showData && (
-          <section className={`rounded-2xl px-5 py-4 text-sm ${canUpdate ? 'border border-[#a9dfbd] bg-[#eef8f1]' : 'bg-white/75'}`}>
+          <section data-pdf-hide className={`rounded-2xl px-5 py-4 text-sm ${canUpdate ? 'border border-[#a9dfbd] bg-[#eef8f1]' : 'bg-white/75'}`}>
             <p className="font-medium text-[#3b3b3b]">데이터 추가</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={() => setSheet('checkup')} className="rounded-xl bg-white px-4 py-2 font-semibold text-[#3d7a55] hover:bg-[#f2f1ec]">
@@ -369,6 +422,7 @@ export function ReportView({
         {sheet && <ConnectSheet kind={sheet} resultId={String(report._id)} onClose={closeSheet} />}
 
         <button
+          data-pdf-hide
           onClick={onRestart}
           className="mt-1 min-h-[72px] w-full rounded-[20px] bg-[#a9dfbd] px-5 text-[18px] font-semibold text-[#3b3b3b] transition-colors hover:bg-[#91d3aa]"
         >
