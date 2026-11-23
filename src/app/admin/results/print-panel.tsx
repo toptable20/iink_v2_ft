@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPrintGcode } from '@/lib/admin';
+import { createPrintGcode, type PrintGcode, type PrintMethod } from '@/lib/admin';
 import {
   PROXY_BASE,
   PROXY_DOWNLOAD_URL,
@@ -37,12 +37,24 @@ function readLast(): string | null {
 
 // Print one result: iink printer proxy on this PC -> chosen printer. G-code comes from the backend (Foodian slicer).
 // Used as the first screen of the print popup (print-dialog.tsx); onPrinted moves the popup to the LCD screens.
+// The two G-code methods (backend print.service): both use the 품평회 모델링 파일 settings.
+const METHODS: { id: PrintMethod; title: string; note: string }[] = [
+  { id: 'model', title: '모델 출력', note: '푸디언 출력 합계로 모델 선택 (3g 미만 traditional_1 · 3–4g _2 · 4–5g _3 · 5–6g _4 · 6g 이상 _5), 인필 0%' },
+  { id: 'infill', title: '인필 출력', note: 'iink_cylinder 모델, 데일리 밸런스 Level로 인필 밀도 (triangles · 1–2 40% · 3–4 35% · 5 30% · 6–7 25% · 8 20% · 9–10 15%)' },
+];
+
+// What was printed, for the message and the status screen: "traditional_1 · 1.8g" / "iink_cylinder · Level 7 · 인필 25%"
+function printLabel(g: PrintGcode): string {
+  const model = g.model.replace(/[.]stl$/, '');
+  return g.method === 'infill' ? `${model} · 데일리 밸런스 Level ${g.dailyBalanceLevel} · 인필 ${g.infillDensity}%` : `${model} · ${g.inkTotalG}g`;
+}
+
 export function PrintPanel({
   resultId,
   onPrinted,
 }: {
   resultId: string;
-  onPrinted?: (job: { printer: SavedPrinter; fileName: string }) => void;
+  onPrinted?: (job: { printer: SavedPrinter; fileName: string; label: string }) => void;
 }) {
   const [proxyOk, setProxyOk] = useState<boolean | null>(null);
   const [printers, setPrinters] = useState<SavedPrinter[]>([]);
@@ -53,6 +65,7 @@ export function PrintPanel({
   const [newIp, setNewIp] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [step, setStep] = useState<'idle' | 'slicing' | 'sending'>('idle');
+  const [method, setMethod] = useState<PrintMethod>('model');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [opening, setOpening] = useState(false);
   const mounted = useRef(true);
@@ -167,7 +180,9 @@ export function PrintPanel({
     setMessage(null);
     try {
       setStep('slicing');
-      const { fileName, gcode } = await createPrintGcode(resultId);
+      const made = await createPrintGcode(resultId, method);
+      const { fileName, gcode } = made;
+      const label = printLabel(made);
       setStep('sending');
       await sendToPrinter(printer.ip, fileName, gcode);
       try {
@@ -175,8 +190,8 @@ export function PrintPanel({
       } catch {
         // storage blocked: only the auto-select next time is lost
       }
-      setMessage({ ok: true, text: `${printer.name}에서 출력을 시작했습니다. (${fileName})` });
-      onPrinted?.({ printer, fileName });
+      setMessage({ ok: true, text: `${printer.name}에서 출력을 시작했습니다. (${label} · ${fileName})` });
+      onPrinted?.({ printer, fileName, label });
       setStates((s) => ({ ...s, [printer.ip]: 'busy' }));
       setSelected(null);
     } catch (e) {
@@ -280,6 +295,21 @@ export function PrintPanel({
             </button>
           )}
 
+          <fieldset className="mt-4" disabled={step !== 'idle'}>
+            <legend className="text-xs font-semibold text-[#3b3b3b]">출력 방식</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {METHODS.map((m) => (
+                <label key={m.id} className={`flex cursor-pointer flex-col rounded-xl border px-3 py-2 text-xs ${method === m.id ? 'border-[#0d79ea] bg-[#f2f8ff]' : 'border-[#e9e7df] bg-white'}`}>
+                  <span className="flex items-center gap-2 font-semibold">
+                    <input type="radio" name="print-method" value={m.id} checked={method === m.id} onChange={() => setMethod(m.id)} />
+                    {m.title}
+                  </span>
+                  <span className="mt-1 text-[11px] leading-relaxed text-[#85847e]">{m.note}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
           <button
             type="button"
             onClick={onPrint}
@@ -298,7 +328,7 @@ export function PrintPanel({
         </p>
       )}
       <p className="mt-3 text-[11px] leading-relaxed text-[#85847e]">
-        현재 출력 설정은 v1과 같습니다 (35 × 35 × 9 mm, 채움 35%). 결과별 설정은 프린터 파라미터 확정 후 적용됩니다.
+        출력 설정은 품평회 모델링 파일 기준입니다 (두 방식 모두 같은 설정, 인필만 다름).
       </p>
     </div>
   );

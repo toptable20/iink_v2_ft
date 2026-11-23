@@ -10,7 +10,7 @@ import { PrintPanel } from './print-panel';
 // Foodian proxy can only upload + start; commands need a proxy that talks to Moonraker directly (tested later).
 
 type Page = 'select' | 'main' | 'tool' | 'home' | 'move' | 'extrusion' | 'preheat' | 'printing';
-type Job = { printer: SavedPrinter; fileName: string };
+type Job = { printer: SavedPrinter; fileName: string; label: string };
 
 const TOOL = '#F5FD87';
 const PRINTING = '#B4C2FA';
@@ -142,7 +142,7 @@ function Printing({ job }: { job: Job | null }) {
 
   return (
     <div className="rounded-lg p-4 sm:p-5" style={{ backgroundColor: PRINTING }}>
-      <p className="text-xs text-[#1D1D1B]/70">{job.printer.name} · {job.printer.ip}</p>
+      <p className="text-xs text-[#1D1D1B]/70">{job.printer.name} · {job.printer.ip} · {job.label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-[#1D1D1B]">{job.fileName}</p>
 
       <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/70">

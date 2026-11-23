@@ -44,11 +44,14 @@ export async function getAllResults(page = 1, limit = 20): Promise<{ list: Admin
   return { list: data.getAllSmartQuizResultsByAdmin.list, total: data.getAllSmartQuizResultsByAdmin.metaData.total };
 }
 
-// G-code for a result from the Foodian slicer (backend print module; v1's fixed shape + settings for now)
-export async function createPrintGcode(resultId: string): Promise<{ fileName: string; gcode: string; lines: number }> {
-  const data = await gql<{ createPrintGcode: { fileName: string; gcode: string; lines: number } }>(
-    `mutation Gcode($resultId: String!) { createPrintGcode(resultId: $resultId) { fileName gcode lines } }`,
-    { resultId },
+// G-code for a result from the Foodian slicer (backend print module, sheet B11 settings). Two methods:
+// 'model' = STL picked by 푸디언 출력 합계; 'infill' = iink_cylinder.stl, infill density by the Daily Balance Level.
+export type PrintMethod = 'model' | 'infill';
+export interface PrintGcode { fileName: string; gcode: string; lines: number; method: PrintMethod; model: string; inkTotalG: number; dailyBalanceLevel: number | null; infillDensity: number | null }
+export async function createPrintGcode(resultId: string, method: PrintMethod = 'model'): Promise<PrintGcode> {
+  const data = await gql<{ createPrintGcode: PrintGcode }>(
+    `mutation Gcode($resultId: String!, $method: String) { createPrintGcode(resultId: $resultId, method: $method) { fileName gcode lines method model inkTotalG dailyBalanceLevel infillDensity } }`,
+    { resultId, method },
   );
   return data.createPrintGcode;
 }
