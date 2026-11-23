@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import type { SmartQuizResult } from '@/lib/smart-quiz';
 import { usedDataLabel } from '@/lib/update-alert';
+import { nutrientKo, topicKo } from '@/lib/report-names';
 
 // Compares a result with the one made just before it (previousResultId) on screen: no new API, nothing saved.
 // Each map holds the OLD value of what changed, so the report can mark the cell and show "이전 …" next to it.
@@ -46,7 +47,7 @@ export function diffReports(cur: SmartQuizResult, prev: SmartQuizResult): Report
     if (!same(t.sourcesUsed, p.sourcesUsed)) d.sources = p.sourcesUsed || '–';
     if (!same(t.stage, p.stage)) d.stage = p.stage || '–';
     if (Object.keys(d).length) topics.set(t.topic, d);
-    if (d.level) summary.push(`${t.topic} Level ${p.displayLevel} → ${t.displayLevel}`);
+    if (d.level) summary.push(`${topicKo(t.topic)} Level ${p.displayLevel} → ${t.displayLevel}`);
   }
 
   const nutrients: ReportDiff['nutrients'] = new Map();
@@ -65,10 +66,10 @@ export function diffReports(cur: SmartQuizResult, prev: SmartQuizResult): Report
   const curNames = new Set(a.topNutrientRows.map((n) => n.name));
   const removedNutrients = b.topNutrientRows.map((n) => n.name).filter((x) => !curNames.has(x));
   const added = a.topNutrientRows.filter((n) => nutrients.get(n.name)?.isNew).map((n) => n.name);
-  if (added.length) summary.push(`영양소 Top 5에 추가: ${added.join(', ')}`);
-  if (removedNutrients.length) summary.push(`영양소 Top 5에서 빠짐: ${removedNutrients.join(', ')}`);
+  if (added.length) summary.push(`영양소 Top 5에 추가: ${added.map(nutrientKo).join(', ')}`);
+  if (removedNutrients.length) summary.push(`영양소 Top 5에서 빠짐: ${removedNutrients.map(nutrientKo).join(', ')}`);
   const amountChanged = [...nutrients].filter(([, d]) => !d.isNew).map(([name]) => name);
-  if (amountChanged.length) summary.push(`영양소 양 변경: ${amountChanged.join(', ')}`);
+  if (amountChanged.length) summary.push(`영양소 양 변경: ${amountChanged.map(nutrientKo).join(', ')}`);
 
   const ink = new Map<string, string>();
   const prevInk = new Map(b.ink.map((i) => [i.id, i.g]));

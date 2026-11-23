@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth';
 import { confirmAction, koreanError, showError } from '@/lib/alerts';
+import { guestStep, type GuestAnswer } from '@/lib/guest';
+import { GuestReport } from './guest-report';
 import {
   answerSmartQuiz,
   restartSmartQuiz,
@@ -26,6 +28,7 @@ function ChevronLeft() {
 // open over the report when the quiz is done. The engine is unchanged: the first result is quiz-only, connected data
 // comes in with 결과 업데이트, and a user with no data just closes the sheet and keeps the quiz result.
 type Extra = 'checkup' | 'watch';
+const GUEST_ID = 'guest';
 const choiceKey = (sessionId: string) => `iink_quiz_connect:${sessionId}`;
 
 function saveChoice(sessionId: string, extras: Extra[]) {
@@ -142,12 +145,22 @@ export function Quiz() {
   const [resumed, setResumed] = useState(false);
   // STEP 0 is shown before the first question of a new attempt (not when a saved quiz is resumed)
   const [intro, setIntro] = useState(false);
+  // Guest mode (no login, team leader 2026-11-20): the answers stay in this page only (nothing saved on the server);
+  // the backend replays them to give the next question, and the report is made from them when the quiz is done.
+  const [guest, setGuest] = useState(false);
+  const guestAnswers = useRef<GuestAnswer[]>([]);
+  const guestExtras = useRef<Extra[]>([]);
+  const [guestDone, setGuestDone] = useState<{ answers: GuestAnswer[]; extras: Extra[] } | null>(null);
 
   // draftAnswer: after going back, the removed answer (a code for choices, the number otherwise).
   const applyState = useCallback(
     (state: SmartQuizState, draftAnswer?: number | null) => {
       setSessionId(state.sessionId);
       setAnsweredCount(state.answeredCount);
+      if (state.sessionId === GUEST_ID && state.step.done) {
+        setGuestDone({ answers: [...guestAnswers.current], extras: guestExtras.current });
+        return;
+      }
       if (state.result) {
         // replace: back from the report must not land on the finished quiz again
         // connect = the STEP 0 choices: the report opens those connect sheets by itself
@@ -198,12 +211,28 @@ export function Quiz() {
     })();
   }, [run]);
 
+  // the same SmartQuizState the member calls return, built from the guest's answers kept in this page
+  const guestState = useCallback(async (answers: GuestAnswer[], lastAnswerValue: number | null = null): Promise<SmartQuizState> => {
+    const next = await guestStep(answers);
+    guestAnswers.current = answers;
+    return { sessionId: GUEST_ID, answeredCount: answers.length, step: next, result: null, lastAnswerValue };
+  }, []);
+
+  function startGuest() {
+    setNeedLogin(false);
+    setGuest(true);
+    setGuestDone(null);
+    setStep(null);
+    void run(() => guestState([])).then((state) => state && setIntro(true));
+  }
+
   function answer(value: number) {
     const id = step?.question?.id;
     if (!id || !sessionId || busy || answerPending.current) return;
     answerPending.current = true;
     setResumed(false);
-    void run(() => answerSmartQuiz(sessionId, id, value), false, '답변을 저장하지 못했습니다').finally(() => {
+    const action = guest ? () => guestState([...guestAnswers.current, { questionId: id, value }]) : () => answerSmartQuiz(sessionId, id, value);
+    void run(action, false, '답변을 저장하지 못했습니다').finally(() => {
       answerPending.current = false;
     });
   }
@@ -211,7 +240,10 @@ export function Quiz() {
   function back() {
     if (!sessionId || !answeredCount || busy) return;
     setResumed(false);
-    void run(() => undoSmartQuiz(sessionId), true, '이전 질문으로 돌아가지 못했습니다');
+    const action = guest
+      ? () => guestState(guestAnswers.current.slice(0, -1), guestAnswers.current.at(-1)?.value ?? null)
+      : () => undoSmartQuiz(sessionId);
+    void run(action, true, '이전 질문으로 돌아가지 못했습니다');
   }
 
   async function restart() {
@@ -221,11 +253,12 @@ export function Quiz() {
     setSelectedOption(null);
     setNumberInput('');
     setResumed(false);
-    void run(restartSmartQuiz, false, '퀴즈를 다시 시작하지 못했습니다').then((state) => state && !state.result && setIntro(true));
+    void run(guest ? () => guestState([]) : restartSmartQuiz, false, '퀴즈를 다시 시작하지 못했습니다').then((state) => state && !state.result && setIntro(true));
   }
 
   function startAfterIntro(extras: Extra[]) {
-    if (sessionId) saveChoice(sessionId, extras);
+    if (guest) guestExtras.current = extras;
+    else if (sessionId) saveChoice(sessionId, extras);
     setIntro(false);
   }
 
@@ -239,9 +272,19 @@ export function Quiz() {
         >
           로그인
         </Link>
+        <button
+          type="button"
+          onClick={startGuest}
+          className="flex min-h-[56px] w-full max-w-[420px] items-center justify-center rounded-[20px] border border-[#a9dfbd] bg-white px-5 text-[16px] font-semibold text-[#3d7a55] transition-colors hover:bg-[#eef8f1]"
+        >
+          로그인 없이 시작
+        </button>
+        <p className="max-w-[420px] text-sm leading-relaxed text-[#85847e]">로그인 없이 진행하면 결과와 연결한 데이터가 저장되지 않으며, 결과 화면을 닫으면 다시 볼 수 없습니다.</p>
       </main>
     );
   }
+
+  if (guestDone) return <GuestReport key={guestDone.answers.length} answers={guestDone.answers} extras={guestDone.extras} onRestart={startGuest} />;
 
   const question = step?.question;
   const canGoBack = answeredCount > 0;
@@ -330,7 +373,7 @@ export function Quiz() {
               <p className="text-base text-[#777]">퀴즈를 불러오지 못했습니다.</p>
               <button
                 type="button"
-                onClick={() => void run(startSmartQuiz)}
+                onClick={() => void run(guest ? () => guestState([]) : startSmartQuiz)}
                 className="min-h-[56px] w-full max-w-[320px] rounded-[20px] bg-[#a9dfbd] px-5 text-[16px] font-semibold text-[#3b3b3b] transition-colors hover:bg-[#91d3aa]"
               >
                 다시 시도

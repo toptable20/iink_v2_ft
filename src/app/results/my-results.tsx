@@ -14,6 +14,7 @@ import { koreanError } from '@/lib/alerts';
 import { updateResultWithAlert, usedDataLabel, usedDataText } from '@/lib/update-alert';
 import { ReportView } from '../report-view';
 import type { ConnectKind } from '../connect-sheet';
+import { topicKo } from '@/lib/report-names';
 
 // An update makes a new result from the same quiz attempt; the list shows only the newest one per attempt
 // (the older ones stay saved for the "달라진 점" comparison and orders). A new quiz attempt gets its own line.
@@ -174,7 +175,7 @@ export function MyResults() {
                   <span className="mt-1 block text-sm text-[#5f5e58]">{report.result.status}</span>
                   {report.changesFromPrevious.length > 0 && (
                     <span className="mt-1 block text-sm text-[#5f5e58]">
-                      이전 결과 대비: {report.changesFromPrevious.map((c) => `${c.topic} ${c.from} → ${c.to}`).join(', ')}
+                      이전 결과 대비: {report.changesFromPrevious.map((c) => `${topicKo(c.topic)} ${c.from} → ${c.to}`).join(', ')}
                     </span>
                   )}
                 </span>
