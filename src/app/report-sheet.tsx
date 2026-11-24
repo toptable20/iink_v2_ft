@@ -47,6 +47,9 @@ const MINERALS: Item[][] = [
 ];
 
 const COL_LEFT = [3.7, 33.8, 64.8]; // em
+// 영양 충분도 % = 100 − 보충 필요도×100, rounded like Excel ROUND: 1 − 0.555 is 0.44499999… in binary, so round the
+// 12-digit value (44.5 → 45), not the raw float (→ 44).
+const sufficiency = (cn: number) => Math.round(Number((100 - Math.min(100, Math.max(0, cn * 100))).toPrecision(12)));
 const num = (n: number, d = 1) => n.toLocaleString('ko-KR', { maximumFractionDigits: d });
 
 function Check() {
@@ -120,7 +123,7 @@ export function ReportSheet({ report, name, date, sheetRef, variant = 'pdf' }: {
   const NutCell = ({ item, left, top }: { item: Item; left: number; top: number }) => {
     const n = need.get(item.engine);
     if (!n) return null; // only the nutrients V9 calculates
-    const pct = Math.round(100 - Math.min(100, Math.max(0, n.correctedNeed * 100)));
+    const pct = sufficiency(n.correctedNeed);
     return (
       <div className="rs-cell" style={{ left: `${left}em`, top: `${top}em` }}>
         <span className="rs-label">{item.label}</span>
@@ -200,7 +203,7 @@ export function ReportSheet({ report, name, date, sheetRef, variant = 'pdf' }: {
               <div className="rs-web-ncol" key={c}>{col.map((item) => {
                 const n = need.get(item.engine);
                 if (!n) return null;
-                const pct = Math.round(100 - Math.min(100, Math.max(0, n.correctedNeed * 100)));
+                const pct = sufficiency(n.correctedNeed);
                 return <div className="rs-web-cell" key={item.engine}>
                   <strong>{item.label}</strong>
                   <div className="rs-bar"><span className={`rs-fill ${pct < PINK_BELOW_PCT ? 'pink' : ''}`} style={{ width: `${pct}%` }}><span className="rs-fill-num">{pct}%</span><OnFill pct={pct} kind="amt">{num(n.target)}/{num(n.rni)}</OnFill></span><span className="rs-amount">{num(n.target)}/{num(n.rni)}</span></div>
